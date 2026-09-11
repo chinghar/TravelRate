@@ -9,7 +9,7 @@ const NAV_LINKS = [
   { href: '/', label: 'Rankings' },
   { href: '/map', label: 'Map' },
   { href: '/wishlist', label: 'Want to go' },
-  { href: '/add', label: 'Add city' },
+  { href: '/add', label: 'Rank' },
 ] as const;
 
 export default function Chrome({ children }: { children: React.ReactNode }) {
@@ -18,12 +18,12 @@ export default function Chrome({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      <header className="sticky top-0 z-20 border-b border-stone-200 bg-stone-50/90 backdrop-blur">
-        <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3">
-          <Link href="/" className="text-lg font-semibold tracking-tight">
+      <header className="sticky top-0 z-20 border-b border-line bg-paper/95 backdrop-blur">
+        <div className="mx-auto flex max-w-4xl items-center justify-between gap-2 px-3 py-3 sm:px-4">
+          <Link href="/" className="shrink-0 text-lg font-semibold tracking-tight">
             CityRank
           </Link>
-          <nav className="flex items-center gap-1">
+          <nav className="flex min-w-0 items-center gap-0.5 sm:gap-1">
             {NAV_LINKS.map((link) => {
               const active =
                 link.href === '/'
@@ -33,10 +33,8 @@ export default function Chrome({ children }: { children: React.ReactNode }) {
                 <Link
                   key={link.href}
                   href={link.href}
-                  className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
-                    active
-                      ? 'bg-stone-900 text-stone-50'
-                      : 'text-stone-600 hover:bg-stone-200'
+                  className={`whitespace-nowrap rounded-full px-2 py-1.5 text-sm font-medium sm:px-3 ${
+                    active ? 'bg-ink text-paper' : 'text-mute hover:text-ink'
                   }`}
                 >
                   {link.label}
@@ -47,7 +45,7 @@ export default function Chrome({ children }: { children: React.ReactNode }) {
               type="button"
               onClick={() => setSettingsOpen(true)}
               aria-label="Settings"
-              className="ml-1 rounded-full p-2 text-stone-600 hover:bg-stone-200"
+              className="ml-0.5 shrink-0 rounded-full p-2 text-mute hover:text-ink sm:ml-1"
             >
               <GearIcon />
             </button>

@@ -63,17 +63,17 @@ export default function SettingsSheet({
   return (
     <div className="fixed inset-0 z-30 flex justify-end">
       <div
-        className="absolute inset-0 bg-black/30"
+        className="absolute inset-0 bg-ink/40"
         onClick={onClose}
         aria-hidden
       />
-      <div className="relative flex h-full w-full max-w-sm flex-col gap-4 bg-white p-6 shadow-xl">
+      <div className="relative flex h-full w-full max-w-sm flex-col gap-4 border-l border-line bg-paper p-6">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Settings</h2>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full p-1 text-stone-500 hover:bg-stone-100"
+            className="p-1 text-mute hover:text-ink"
             aria-label="Close"
           >
             ✕
@@ -81,22 +81,22 @@ export default function SettingsSheet({
         </div>
 
         <div className="flex flex-col gap-3">
-          <h3 className="text-sm font-medium text-stone-500">Backup & sharing</h3>
-          <p className="text-sm text-stone-600">
-            All your data lives only in this browser. Export a JSON backup to
-            keep it safe or move it to another device, then import it there.
+          <h3 className="text-sm font-medium text-mute">Backup & sharing</h3>
+          <p className="text-sm text-ink">
+            Your data lives only in this browser. Export a backup, or import
+            one to restore it.
           </p>
           <button
             type="button"
             onClick={handleExport}
-            className="rounded-lg bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-700"
+            className="rounded-full bg-ink px-4 py-2 text-sm font-medium text-paper"
           >
             Export JSON
           </button>
           <button
             type="button"
             onClick={handleImportClick}
-            className="rounded-lg border border-stone-300 px-4 py-2 text-sm font-medium text-stone-800 hover:bg-stone-100"
+            className="rounded-full border border-line px-4 py-2 text-sm font-medium text-ink hover:border-ink"
           >
             Import JSON
           </button>
@@ -107,8 +107,8 @@ export default function SettingsSheet({
             className="hidden"
             onChange={handleFileChange}
           />
-          {message && <p className="text-sm text-stone-500">{message}</p>}
-          <p className="text-xs text-stone-400">
+          {message && <p className="text-sm text-mute">{message}</p>}
+          <p className="text-xs text-mute">
             Importing replaces everything currently stored in this browser.
           </p>
         </div>
