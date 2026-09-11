@@ -6,12 +6,13 @@ import { getCityById, formatCoordinates } from '@/lib/cities';
 import * as db from '@/lib/db';
 import { useCityData } from '@/lib/useCityData';
 import { BUCKET_LABELS } from '@/lib/ranking';
+import { DIMENSIONS, getDimension } from '@/lib/dimensions';
 import ScoreBadge from '@/components/ScoreBadge';
 import { ALL_TAGS, type Tag, type Visit, type WishlistItem } from '@/lib/types';
 
 export default function CityDetailClient({ cityId }: { cityId: string }) {
   const city = getCityById(cityId);
-  const { rankedEntries, wishlist, loaded, refresh } = useCityData();
+  const { wishlist, loaded, refresh, getCityRankings } = useCityData();
   const [visit, setVisit] = useState<Visit | null | undefined>(undefined);
   const [notesDraft, setNotesDraft] = useState('');
   const [newDate, setNewDate] = useState('');
@@ -38,19 +39,16 @@ export default function CityDetailClient({ cityId }: { cityId: string }) {
     );
   }
 
-  const rankIndex = rankedEntries.findIndex((e) => e.city.id === cityId);
-  const rankEntry = rankIndex >= 0 ? rankedEntries[rankIndex] : null;
-  const bucketPeers = visit
-    ? rankedEntries.filter((e) => e.visit.bucket === visit.bucket)
-    : [];
-  const bucketPosition = visit
-    ? bucketPeers.findIndex((e) => e.city.id === cityId)
-    : -1;
+  const cityRankings = getCityRankings(cityId);
+  const rankedDimensionIds = new Set(cityRankings.map((r) => r.dimensionId));
+  const unrankedDimensions = DIMENSIONS.filter((d) => !rankedDimensionIds.has(d.id));
+  const hasAnyRanking = cityRankings.length > 0;
 
   function updateVisit(updater: (prev: Visit) => Visit) {
     setVisit((prev) => {
-      if (!prev) return prev;
-      const next = updater(prev);
+      const base: Visit =
+        prev ?? { cityId, tags: [], notes: '', dates: [], createdAt: new Date().toISOString() };
+      const next = updater(base);
       void db.putVisit(next);
       return next;
     });
@@ -105,135 +103,153 @@ export default function CityDetailClient({ cityId }: { cityId: string }) {
         </p>
       </div>
 
-      {visit && rankEntry && (
-        <div className="flex items-center justify-between border-y border-line py-4">
-          <div className="flex flex-col text-sm text-mute">
-            <span>#{rankIndex + 1} overall</span>
-            <span>
-              #{bucketPosition + 1} of {bucketPeers.length} in{' '}
-              {BUCKET_LABELS[visit.bucket]}
-            </span>
-          </div>
-          <ScoreBadge score={rankEntry.score} size="lg" />
-        </div>
-      )}
+      <div>
+        {wishlistItem ? (
+          <button
+            type="button"
+            onClick={removeFromWishlist}
+            className="rounded-full border border-line px-4 py-2 text-sm font-medium text-mute hover:text-ink"
+          >
+            Remove from want to go
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={addToWishlist}
+            className="rounded-full border border-line px-4 py-2 text-sm font-medium text-mute hover:text-ink"
+          >
+            Add to want to go
+          </button>
+        )}
+      </div>
 
-      {visit === undefined && <p className="text-mute">Loading…</p>}
-
-      {visit === null && (
+      {!hasAnyRanking && (
         <div className="flex flex-col gap-3 border-y border-line py-4">
-          <p className="text-ink">
-            {wishlistItem
-              ? "This city is on your want-to-go list. You haven't ranked it."
-              : "You haven't ranked this city."}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Link
-              href={`/add?cityId=${cityId}`}
-              className="rounded-full bg-ink px-4 py-2 text-sm font-medium text-paper"
-            >
-              Rank this city
-            </Link>
-            {wishlistItem ? (
-              <button
-                type="button"
-                onClick={removeFromWishlist}
-                className="rounded-full border border-line px-4 py-2 text-sm font-medium text-mute hover:text-ink"
-              >
-                Remove from want to go
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={addToWishlist}
-                className="rounded-full border border-line px-4 py-2 text-sm font-medium text-mute hover:text-ink"
-              >
-                Add to want to go
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {visit && (
-        <>
-          <div className="flex flex-col gap-2">
-            <h2 className="text-sm font-medium text-mute">Tags</h2>
-            <div className="flex flex-wrap gap-2">
-              {ALL_TAGS.map((tag) => (
-                <button
-                  key={tag}
-                  type="button"
-                  onClick={() => toggleTag(tag)}
-                  className={`rounded-full px-3 py-1 text-xs font-medium capitalize ${
-                    visit.tags.includes(tag)
-                      ? 'bg-ink text-paper'
-                      : 'border border-line text-mute hover:text-ink'
-                  }`}
-                >
-                  {tag}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <h2 className="text-sm font-medium text-mute">Dates visited</h2>
-            <div className="flex flex-wrap gap-2">
-              {visit.dates.map((date) => (
-                <span
-                  key={date}
-                  className="flex items-center gap-1 border border-line px-3 py-1 font-mono text-sm"
-                >
-                  {date}
-                  <button
-                    type="button"
-                    onClick={() => removeDate(date)}
-                    aria-label={`Remove ${date}`}
-                    className="text-mute hover:text-ink"
-                  >
-                    ✕
-                  </button>
-                </span>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <input
-                type="date"
-                value={newDate}
-                onChange={(e) => setNewDate(e.target.value)}
-                className="border border-line px-3 py-1.5 text-sm"
-              />
-              <button
-                type="button"
-                onClick={addDate}
-                className="border border-line px-3 py-1.5 text-sm font-medium hover:border-ink"
-              >
-                Add date
-              </button>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <h2 className="text-sm font-medium text-mute">Notes</h2>
-            <textarea
-              value={notesDraft}
-              onChange={(e) => setNotesDraft(e.target.value)}
-              onBlur={saveNotes}
-              rows={4}
-              placeholder="What did you think of this city?"
-              className="border border-line px-3 py-2 text-sm"
-            />
-          </div>
-
+          <p className="text-ink">You haven&apos;t ranked this city.</p>
           <Link
             href={`/add?cityId=${cityId}`}
-            className="self-start rounded-full border border-line px-4 py-2 text-sm font-medium text-mute hover:text-ink"
+            className="self-start rounded-full bg-ink px-4 py-2 text-sm font-medium text-paper"
           >
-            Re-rank
+            Rank this city
           </Link>
-        </>
+        </div>
       )}
+
+      {hasAnyRanking && (
+        <ul className="flex flex-col border-y border-line">
+          {cityRankings.map((r) => {
+            const dim = getDimension(r.dimensionId);
+            return (
+              <li
+                key={r.dimensionId}
+                className="flex items-center justify-between gap-4 border-b border-line py-3 last:border-b-0"
+              >
+                <div className="flex flex-col">
+                  <span className="font-medium">{dim.label}</span>
+                  <span className="text-sm text-mute">
+                    #{r.position + 1} of {r.total} in {BUCKET_LABELS[r.bucket]}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <ScoreBadge score={r.score} bucket={r.bucket} />
+                  <Link
+                    href={`/add?cityId=${cityId}&dimension=${r.dimensionId}`}
+                    className="text-xs font-medium text-mute hover:text-ink"
+                  >
+                    Re-rank
+                  </Link>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {unrankedDimensions.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <h2 className="text-sm font-medium text-mute">Rank on more</h2>
+          <div className="flex flex-wrap gap-2">
+            {unrankedDimensions.map((d) => (
+              <Link
+                key={d.id}
+                href={`/add?cityId=${cityId}&dimension=${d.id}`}
+                className="rounded-full border border-line px-3 py-1.5 text-sm font-medium text-mute hover:text-ink"
+              >
+                + {d.label}
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-col gap-2">
+        <h2 className="text-sm font-medium text-mute">Tags</h2>
+        <div className="flex flex-wrap gap-2">
+          {ALL_TAGS.map((tag) => (
+            <button
+              key={tag}
+              type="button"
+              onClick={() => toggleTag(tag)}
+              className={`rounded-full px-3 py-1 text-xs font-medium capitalize ${
+                (visit?.tags ?? []).includes(tag)
+                  ? 'bg-ink text-paper'
+                  : 'border border-line text-mute hover:text-ink'
+              }`}
+            >
+              {tag}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <h2 className="text-sm font-medium text-mute">Dates visited</h2>
+        <div className="flex flex-wrap gap-2">
+          {(visit?.dates ?? []).map((date) => (
+            <span
+              key={date}
+              className="flex items-center gap-1 border border-line px-3 py-1 font-mono text-sm"
+            >
+              {date}
+              <button
+                type="button"
+                onClick={() => removeDate(date)}
+                aria-label={`Remove ${date}`}
+                className="text-mute hover:text-ink"
+              >
+                ✕
+              </button>
+            </span>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <input
+            type="date"
+            value={newDate}
+            onChange={(e) => setNewDate(e.target.value)}
+            className="border border-line px-3 py-1.5 text-sm"
+          />
+          <button
+            type="button"
+            onClick={addDate}
+            className="border border-line px-3 py-1.5 text-sm font-medium hover:border-ink"
+          >
+            Add date
+          </button>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <h2 className="text-sm font-medium text-mute">Notes</h2>
+        <textarea
+          value={notesDraft}
+          onChange={(e) => setNotesDraft(e.target.value)}
+          onBlur={saveNotes}
+          rows={4}
+          placeholder="What did you think of this city?"
+          className="border border-line px-3 py-2 text-sm"
+        />
+      </div>
     </div>
   );
 }

@@ -1,52 +1,41 @@
 import type { Bucket } from './types';
 
-export interface BucketRange {
-  min: number;
-  max: number;
-}
-
-export const BUCKET_RANGES: Record<Bucket, BucketRange> = {
-  loved: { min: 6.7, max: 10.0 },
-  fine: { min: 3.4, max: 6.6 },
-  didnt: { min: 0.0, max: 3.3 },
-};
-
 export const BUCKET_LABELS: Record<Bucket, string> = {
   loved: 'Loved it',
   fine: 'It was fine',
   didnt: "Didn't like it",
 };
 
+/** Buckets determine ordering precedence only — they own no score range. */
+export const BUCKET_ORDER: Bucket[] = ['loved', 'fine', 'didnt'];
+
 function round1(n: number): number {
   return Math.round(n * 10) / 10;
 }
 
 /**
- * Score for a single entry given its rank within a bucket (0 = best) and the
- * bucket's total size. Linear interpolation across the bucket's fixed range.
+ * Score for one entry given its absolute position (0 = best) in a
+ * dimension's WHOLE ranked list of `totalCount` entries. Linear
+ * interpolation across the entire list: the top entry always scores
+ * exactly 10.0; the bottom approaches (never reaches) 0.0; the gap
+ * between consecutive ranks is a constant 10 / totalCount.
  */
-export function computeScore(
-  rankInBucket: number,
-  bucketSize: number,
-  bucket: Bucket
-): number {
-  const { min, max } = BUCKET_RANGES[bucket];
-  if (bucketSize <= 1) {
-    return round1((min + max) / 2);
-  }
-  const fraction = rankInBucket / (bucketSize - 1);
-  return round1(max - fraction * (max - min));
+export function computeScoreAtPosition(position: number, totalCount: number): number {
+  if (totalCount <= 0) return 10;
+  return round1(10 * (1 - position / totalCount));
 }
 
 export interface RankedEntry {
   cityId: string;
   bucket: Bucket;
-  rankInBucket: number;
+  position: number;
 }
 
 /**
- * Recomputes scores for every entry across all buckets. Scores are always
- * derived from rank position — never stored directly.
+ * Recomputes scores for every entry in one dimension's full ranked list.
+ * Buckets only decide precedence (loved, then fine, then didn't); within a
+ * bucket, entries are ordered by `position`. Scores are always derived —
+ * never stored directly.
  */
 export function computeAllScores(entries: RankedEntry[]): Map<string, number> {
   const scores = new Map<string, number>();
@@ -58,23 +47,19 @@ export function computeAllScores(entries: RankedEntry[]): Map<string, number> {
   for (const entry of entries) {
     byBucket[entry.bucket].push(entry);
   }
-  (Object.keys(byBucket) as Bucket[]).forEach((bucket) => {
-    const sorted = byBucket[bucket]
-      .slice()
-      .sort((a, b) => a.rankInBucket - b.rankInBucket);
-    const size = sorted.length;
-    sorted.forEach((entry, idx) => {
-      scores.set(entry.cityId, computeScore(idx, size, bucket));
-    });
+  const flat = BUCKET_ORDER.flatMap((bucket) =>
+    byBucket[bucket].slice().sort((a, b) => a.position - b.position)
+  );
+  const total = flat.length;
+  flat.forEach((entry, i) => {
+    scores.set(entry.cityId, computeScoreAtPosition(i, total));
   });
   return scores;
 }
 
-/** Which score band a given score falls into, e.g. for map pin coloring. */
-export function getScoreBand(score: number): Bucket {
-  if (score >= BUCKET_RANGES.loved.min) return 'loved';
-  if (score >= BUCKET_RANGES.fine.min) return 'fine';
-  return 'didnt';
+/** Flattens per-bucket order arrays into one absolute rank order, best to worst. */
+export function flattenBucketOrders(bucketOrders: Record<Bucket, string[]>): string[] {
+  return BUCKET_ORDER.flatMap((bucket) => bucketOrders[bucket]);
 }
 
 /**
@@ -82,6 +67,10 @@ export function getScoreBand(score: number): Bucket {
  * sorted best-to-worst (index 0 = best). `lo`/`hi` bound the range of
  * possible insertion indices for the new city; the window narrows on each
  * answer until lo === hi, at which point insertion index is `lo`.
+ *
+ * Unchanged from before dimensions existed: this operates on a plain
+ * string[] order array and has no awareness of dimensions. Callers decide
+ * which dimension+bucket's order array to pass in.
  */
 export interface ComparisonState {
   bucket: Bucket;
@@ -137,7 +126,7 @@ export function answerComparison(
 /** Maximum comparisons a bucket of this existing size could ever require. */
 export function maxComparisons(existingBucketSize: number): number {
   if (existingBucketSize <= 0) return 0;
-  return Math.ceil(Math.log2(existingBucketSize)) + 1;
+  return Math.floor(Math.log2(existingBucketSize)) + 1;
 }
 
 /** Inserts a cityId into a sorted bucket order at the given index. */

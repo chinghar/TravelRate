@@ -6,8 +6,10 @@ import { searchCities, getCityById, formatCoordinates } from '@/lib/cities';
 import * as db from '@/lib/db';
 import {
   BUCKET_LABELS,
+  BUCKET_ORDER,
   answerComparison,
-  computeScore,
+  computeScoreAtPosition,
+  flattenBucketOrders,
   getCurrentComparisonCityId,
   getInsertIndex,
   insertCityIntoBucket,
@@ -16,37 +18,65 @@ import {
   type ComparisonAnswer,
   type ComparisonState,
 } from '@/lib/ranking';
+import {
+  DIMENSIONS,
+  OVERALL_DIMENSION_ID,
+  SECONDARY_DIMENSIONS,
+  getDimension,
+  type DimensionId,
+} from '@/lib/dimensions';
 import ScoreBadge from '@/components/ScoreBadge';
-import type { Bucket, City, Visit } from '@/lib/types';
+import type { Bucket, City, RankingRecord } from '@/lib/types';
 
-type Step = 'search' | 'bucket' | 'compare' | 'confirm';
+type Step = 'search' | 'bucket' | 'compare' | 'confirm' | 'pickDimensions';
 
-const BUCKET_ORDER: Bucket[] = ['loved', 'fine', 'didnt'];
+const BUCKET_STEP_ORDER: Bucket[] = ['loved', 'fine', 'didnt'];
+const VALID_DIMENSION_IDS = new Set(DIMENSIONS.map((d) => d.id));
 
 function AddFlowInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const presetCityId = searchParams.get('cityId');
+  const rawDimensionParam = searchParams.get('dimension');
+  const presetDimensionId: DimensionId | null =
+    rawDimensionParam && VALID_DIMENSION_IDS.has(rawDimensionParam as DimensionId)
+      ? (rawDimensionParam as DimensionId)
+      : null;
+  const isolatedMode = presetDimensionId !== null;
 
   const [step, setStep] = useState<Step>(presetCityId ? 'bucket' : 'search');
   const [query, setQuery] = useState('');
   const [selectedCity, setSelectedCity] = useState<City | null>(
     presetCityId ? getCityById(presetCityId) ?? null : null
   );
-  const [allVisits, setAllVisits] = useState<Visit[]>([]);
+  const [currentDimensionId, setCurrentDimensionId] = useState<DimensionId>(
+    presetDimensionId ?? OVERALL_DIMENSION_ID
+  );
+  const [dimensionQueue, setDimensionQueue] = useState<DimensionId[]>([]);
+  const [selectedExtra, setSelectedExtra] = useState<Set<DimensionId>>(new Set());
+  const [allRankings, setAllRankings] = useState<RankingRecord[]>([]);
   const [bucket, setBucket] = useState<Bucket | null>(null);
   const [comparisonState, setComparisonState] = useState<ComparisonState | null>(null);
   const [verdictChoice, setVerdictChoice] = useState<'new' | 'existing' | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    db.getAllVisits().then(setAllVisits);
+    db.getAllRankings().then(setAllRankings);
   }, []);
+
+  const dimension = getDimension(currentDimensionId);
 
   const results = useMemo(
     () => (step === 'search' ? searchCities(query, 25) : []),
     [step, query]
   );
+
+  function getBucketOrder(dimensionId: DimensionId, b: Bucket, excludeCityId?: string) {
+    return allRankings
+      .filter((r) => r.dimensionId === dimensionId && r.bucket === b && r.cityId !== excludeCityId)
+      .sort((a, c) => a.position - c.position)
+      .map((r) => r.cityId);
+  }
 
   function chooseCity(city: City) {
     setSelectedCity(city);
@@ -56,10 +86,7 @@ function AddFlowInner() {
   function chooseBucket(b: Bucket) {
     if (!selectedCity) return;
     setBucket(b);
-    const order = allVisits
-      .filter((v) => v.bucket === b && v.cityId !== selectedCity.id)
-      .sort((a, c) => a.rankInBucket - c.rankInBucket)
-      .map((v) => v.cityId);
+    const order = getBucketOrder(currentDimensionId, b, selectedCity.id);
     const state = startComparison(b, order);
     setComparisonState(state);
     setStep(isComparisonDone(state) ? 'confirm' : 'compare');
@@ -100,48 +127,109 @@ function AddFlowInner() {
 
   const finalScore = useMemo(() => {
     if (!finalOrder || !bucket || !selectedCity) return null;
-    const idx = finalOrder.indexOf(selectedCity.id);
-    return computeScore(idx, finalOrder.length, bucket);
-  }, [finalOrder, bucket, selectedCity]);
+    const byBucket: Record<Bucket, string[]> = { loved: [], fine: [], didnt: [] };
+    for (const b of BUCKET_STEP_ORDER) {
+      byBucket[b] =
+        b === bucket ? finalOrder : getBucketOrder(currentDimensionId, b, selectedCity.id);
+    }
+    const flat = flattenBucketOrders(byBucket);
+    const position = flat.indexOf(selectedCity.id);
+    return computeScoreAtPosition(position, flat.length);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [finalOrder, bucket, selectedCity, currentDimensionId, allRankings]);
+
+  const isLastStep =
+    isolatedMode ||
+    (currentDimensionId !== OVERALL_DIMENSION_ID && dimensionQueue.length === 0);
 
   async function commit() {
     if (!finalOrder || !bucket || !selectedCity) return;
     setSaving(true);
-    const visits = await db.getAllVisits();
-    const visitMap = new Map(visits.map((v) => [v.cityId, v]));
-    const self = visitMap.get(selectedCity.id);
+    const cityId = selectedCity.id;
     const now = new Date().toISOString();
 
-    const updatedBucketVisits: Visit[] = finalOrder.map((cityId, idx) => {
-      if (cityId === selectedCity.id) {
-        return {
-          cityId,
-          bucket,
-          rankInBucket: idx,
-          tags: self?.tags ?? [],
-          notes: self?.notes ?? '',
-          dates: self?.dates ?? [],
-          createdAt: self?.createdAt ?? now,
-        };
-      }
-      const prev = visitMap.get(cityId)!;
-      return { ...prev, bucket, rankInBucket: idx };
-    });
+    const updatedBucketRecords: RankingRecord[] = finalOrder.map((id, idx) => ({
+      cityId: id,
+      dimensionId: currentDimensionId,
+      bucket,
+      position: idx,
+      updatedAt: now,
+    }));
+    await db.putRankings(updatedBucketRecords);
 
-    await db.putVisits(updatedBucketVisits);
-
-    if (self && self.bucket !== bucket) {
-      const oldBucketRemaining = visits
-        .filter((v) => v.bucket === self.bucket && v.cityId !== selectedCity.id)
-        .sort((a, c) => a.rankInBucket - c.rankInBucket)
-        .map((v, idx) => ({ ...v, rankInBucket: idx }));
+    const existing = allRankings.find(
+      (r) => r.dimensionId === currentDimensionId && r.cityId === cityId
+    );
+    if (existing && existing.bucket !== bucket) {
+      const oldBucketRemaining = getBucketOrder(currentDimensionId, existing.bucket, cityId).map(
+        (id, idx) => ({
+          cityId: id,
+          dimensionId: currentDimensionId,
+          bucket: existing.bucket,
+          position: idx,
+          updatedAt: now,
+        })
+      );
       if (oldBucketRemaining.length > 0) {
-        await db.putVisits(oldBucketRemaining);
+        await db.putRankings(oldBucketRemaining);
       }
     }
 
-    await db.removeFromWishlist(selectedCity.id);
-    router.push(`/city/${selectedCity.id}`);
+    await db.removeFromWishlist(cityId);
+
+    const fresh = await db.getAllRankings();
+    setAllRankings(fresh);
+    setSaving(false);
+  }
+
+  async function proceedAfterConfirm() {
+    await commit();
+    if (!selectedCity) return;
+
+    if (isolatedMode) {
+      router.push(`/city/${selectedCity.id}`);
+      return;
+    }
+    if (currentDimensionId === OVERALL_DIMENSION_ID) {
+      setStep('pickDimensions');
+      return;
+    }
+    const [next, ...rest] = dimensionQueue;
+    if (next) {
+      setDimensionQueue(rest);
+      setCurrentDimensionId(next);
+      setBucket(null);
+      setComparisonState(null);
+      setStep('bucket');
+    } else {
+      router.push(`/city/${selectedCity.id}`);
+    }
+  }
+
+  function toggleExtraDimension(id: DimensionId) {
+    setSelectedExtra((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function confirmDimensionPicks() {
+    if (!selectedCity) return;
+    const picked = SECONDARY_DIMENSIONS.filter((d) => selectedExtra.has(d.id)).map(
+      (d) => d.id
+    );
+    if (picked.length === 0) {
+      router.push(`/city/${selectedCity.id}`);
+      return;
+    }
+    const [first, ...rest] = picked;
+    setDimensionQueue(rest);
+    setCurrentDimensionId(first);
+    setBucket(null);
+    setComparisonState(null);
+    setStep('bucket');
   }
 
   if (step === 'compare' && selectedCity && comparisonState) {
@@ -149,59 +237,64 @@ function AddFlowInner() {
     const opponent = opponentId ? getCityById(opponentId) : undefined;
     if (opponent) {
       return (
-        <div className="fixed inset-0 z-50 flex flex-col bg-ink text-paper md:flex-row">
-          <button
-            type="button"
-            onClick={() => chooseAnswer('new')}
-            disabled={verdictChoice !== null}
-            className={`flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center transition-all duration-300 ${
-              verdictChoice === 'new'
-                ? 'scale-105 text-signal'
-                : verdictChoice === 'existing'
-                  ? 'text-paper/30'
-                  : ''
-            }`}
-          >
-            <span className="text-3xl font-semibold sm:text-4xl">
-              {selectedCity.name}
-            </span>
-            <span className="font-mono text-sm text-paper/60">
-              {formatCoordinates(selectedCity.lat, selectedCity.lng)}
-            </span>
-          </button>
-
-          <div className="relative flex shrink-0 items-center justify-center px-2 py-3 md:px-3 md:py-2">
-            <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-paper/15 md:hidden" />
-            <div className="absolute inset-y-0 left-1/2 hidden w-px -translate-x-1/2 bg-paper/15 md:block" />
+        <div className="fixed inset-0 z-50 flex flex-col bg-ink text-paper">
+          <p className="px-4 pt-4 text-center text-sm font-medium text-paper/70">
+            {dimension.question}
+          </p>
+          <div className="flex flex-1 flex-col md:flex-row">
             <button
               type="button"
-              onClick={() => chooseAnswer('tooClose')}
+              onClick={() => chooseAnswer('new')}
               disabled={verdictChoice !== null}
-              className="relative z-10 rounded-full bg-ink px-3 py-1.5 text-xs font-medium text-paper/70 hover:text-paper"
+              className={`flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center transition-all duration-300 ${
+                verdictChoice === 'new'
+                  ? 'scale-105 text-signal'
+                  : verdictChoice === 'existing'
+                    ? 'text-paper/30'
+                    : ''
+              }`}
             >
-              Too close to call
+              <span className="text-3xl font-semibold sm:text-4xl">
+                {selectedCity.name}
+              </span>
+              <span className="font-mono text-sm text-paper/60">
+                {formatCoordinates(selectedCity.lat, selectedCity.lng)}
+              </span>
+            </button>
+
+            <div className="relative flex shrink-0 items-center justify-center px-2 py-3 md:px-3 md:py-2">
+              <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-paper/15 md:hidden" />
+              <div className="absolute inset-y-0 left-1/2 hidden w-px -translate-x-1/2 bg-paper/15 md:block" />
+              <button
+                type="button"
+                onClick={() => chooseAnswer('tooClose')}
+                disabled={verdictChoice !== null}
+                className="relative z-10 rounded-full bg-ink px-3 py-1.5 text-xs font-medium text-paper/70 hover:text-paper"
+              >
+                Too close to call
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => chooseAnswer('existing')}
+              disabled={verdictChoice !== null}
+              className={`flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center transition-all duration-300 ${
+                verdictChoice === 'existing'
+                  ? 'scale-105 text-signal'
+                  : verdictChoice === 'new'
+                    ? 'text-paper/30'
+                    : ''
+              }`}
+            >
+              <span className="text-3xl font-semibold sm:text-4xl">
+                {opponent.name}
+              </span>
+              <span className="font-mono text-sm text-paper/60">
+                {formatCoordinates(opponent.lat, opponent.lng)}
+              </span>
             </button>
           </div>
-
-          <button
-            type="button"
-            onClick={() => chooseAnswer('existing')}
-            disabled={verdictChoice !== null}
-            className={`flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center transition-all duration-300 ${
-              verdictChoice === 'existing'
-                ? 'scale-105 text-signal'
-                : verdictChoice === 'new'
-                  ? 'text-paper/30'
-                  : ''
-            }`}
-          >
-            <span className="text-3xl font-semibold sm:text-4xl">
-              {opponent.name}
-            </span>
-            <span className="font-mono text-sm text-paper/60">
-              {formatCoordinates(opponent.lat, opponent.lng)}
-            </span>
-          </button>
         </div>
       );
     }
@@ -209,7 +302,9 @@ function AddFlowInner() {
 
   return (
     <div className="mx-auto flex w-full max-w-lg flex-col gap-6">
-      <StepIndicator step={step} />
+      {!isolatedMode && currentDimensionId === OVERALL_DIMENSION_ID && (
+        <StepIndicator step={step} />
+      )}
 
       {step === 'search' && (
         <div className="flex flex-col gap-3">
@@ -249,7 +344,7 @@ function AddFlowInner() {
       {step === 'bucket' && selectedCity && (
         <div className="flex flex-col gap-3">
           <h1 className="text-xl font-semibold">
-            How was {selectedCity.name}?
+            {dimension.bucketPrompt(selectedCity.name)}
           </h1>
           <div className="flex flex-col gap-2">
             {BUCKET_ORDER.map((b) => (
@@ -268,19 +363,56 @@ function AddFlowInner() {
 
       {step === 'confirm' && selectedCity && finalOrder && bucket && finalScore !== null && (
         <div className="flex flex-col items-center gap-3 py-8 text-center">
-          <h1 className="text-xl font-semibold">{selectedCity.name} is ranked.</h1>
+          <h1 className="text-xl font-semibold">
+            {selectedCity.name} is ranked on {dimension.label.toLowerCase()}.
+          </h1>
           <p className="text-mute">
             #{finalOrder.indexOf(selectedCity.id) + 1} of {finalOrder.length} in{' '}
             {BUCKET_LABELS[bucket]}
           </p>
-          <ScoreBadge score={finalScore} size="lg" />
+          <ScoreBadge score={finalScore} bucket={bucket} size="lg" />
           <button
             type="button"
             disabled={saving}
-            onClick={commit}
+            onClick={proceedAfterConfirm}
             className="mt-4 rounded-full bg-ink px-6 py-2.5 text-sm font-medium text-paper disabled:opacity-50"
           >
-            {saving ? 'Saving…' : 'View ranking'}
+            {saving ? 'Saving…' : isLastStep ? 'View ranking' : 'Continue'}
+          </button>
+        </div>
+      )}
+
+      {step === 'pickDimensions' && selectedCity && (
+        <div className="flex flex-col gap-4">
+          <h1 className="text-xl font-semibold">
+            Rank {selectedCity.name} on anything else?
+          </h1>
+          <p className="text-sm text-mute">Optional — pick as many as you like.</p>
+          <div className="flex flex-wrap gap-2">
+            {SECONDARY_DIMENSIONS.map((d) => {
+              const active = selectedExtra.has(d.id);
+              return (
+                <button
+                  key={d.id}
+                  type="button"
+                  onClick={() => toggleExtraDimension(d.id)}
+                  className={`rounded-full px-3 py-1.5 text-sm font-medium ${
+                    active
+                      ? 'bg-ink text-paper'
+                      : 'border border-line text-mute hover:text-ink'
+                  }`}
+                >
+                  {d.label}
+                </button>
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            onClick={confirmDimensionPicks}
+            className="mt-2 self-start rounded-full bg-ink px-6 py-2.5 text-sm font-medium text-paper"
+          >
+            {selectedExtra.size === 0 ? 'Skip' : 'Continue'}
           </button>
         </div>
       )}
