@@ -4,15 +4,14 @@ import 'leaflet/dist/leaflet.css';
 import { MapContainer, TileLayer, CircleMarker, Tooltip } from 'react-leaflet';
 import { useRouter } from 'next/navigation';
 import { useCityData } from '@/lib/useCityData';
-import { SCORE_BAND_COLORS } from './ScoreBadge';
-import { getScoreBand } from '@/lib/ranking';
+import { getScoreBandColorValue } from './ScoreBadge';
 
 export default function CityMap() {
   const router = useRouter();
   const { rankedEntries, loaded } = useCityData();
 
   return (
-    <div className="relative h-[70vh] w-full overflow-hidden rounded-xl border border-stone-200">
+    <div className="relative h-[70vh] w-full overflow-hidden border border-line">
       <MapContainer
         center={[20, 0]}
         zoom={2}
@@ -26,8 +25,7 @@ export default function CityMap() {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         {rankedEntries.map((entry) => {
-          const band = getScoreBand(entry.score);
-          const color = SCORE_BAND_COLORS[band];
+          const color = getScoreBandColorValue(entry.score);
           return (
             <CircleMarker
               key={entry.city.id}
@@ -44,7 +42,12 @@ export default function CityMap() {
               }}
             >
               <Tooltip direction="top" offset={[0, -6]}>
-                {entry.city.name} · {entry.score.toFixed(1)}
+                <div className="flex flex-col items-center leading-tight">
+                  <span>{entry.city.name}</span>
+                  <span className="font-mono" style={{ color }}>
+                    {entry.score.toFixed(1)}
+                  </span>
+                </div>
               </Tooltip>
             </CircleMarker>
           );
@@ -52,7 +55,7 @@ export default function CityMap() {
       </MapContainer>
       {loaded && rankedEntries.length === 0 && (
         <div className="pointer-events-none absolute inset-0 z-[400] flex items-center justify-center">
-          <p className="rounded-lg bg-white/90 px-4 py-2 text-stone-500 shadow">
+          <p className="bg-paper px-4 py-2 text-mute">
             Rank a city to see it on the map.
           </p>
         </div>

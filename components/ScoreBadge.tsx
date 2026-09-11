@@ -1,24 +1,49 @@
 import { getScoreBand } from '@/lib/ranking';
 
-const BAND_STYLES = {
-  loved: 'bg-emerald-100 text-emerald-800',
-  fine: 'bg-amber-100 text-amber-800',
-  didnt: 'bg-rose-100 text-rose-800',
+const BAND_TEXT_CLASS = {
+  loved: 'text-signal',
+  fine: 'text-signal-dim',
+  didnt: 'text-ink',
 } as const;
 
-export default function ScoreBadge({ score }: { score: number }) {
+const SIZE_CLASS = {
+  md: 'text-lg',
+  lg: 'text-5xl',
+} as const;
+
+export default function ScoreBadge({
+  score,
+  size = 'md',
+}: {
+  score: number;
+  size?: 'md' | 'lg';
+}) {
   const band = getScoreBand(score);
   return (
     <span
-      className={`inline-flex min-w-[3rem] items-center justify-center rounded-full px-2.5 py-1 text-sm font-semibold tabular-nums ${BAND_STYLES[band]}`}
+      className={`font-mono font-bold tabular-nums ${SIZE_CLASS[size]} ${BAND_TEXT_CLASS[band]}`}
     >
       {score.toFixed(1)}
     </span>
   );
 }
 
-export const SCORE_BAND_COLORS: Record<'loved' | 'fine' | 'didnt', string> = {
-  loved: '#059669',
-  fine: '#d97706',
-  didnt: '#e11d48',
-};
+const BAND_CSS_VAR = {
+  loved: '--signal',
+  fine: '--signal-dim',
+  didnt: '--mute',
+} as const;
+
+/**
+ * Resolves a band to its actual color, read from the CSS custom properties
+ * in globals.css, for contexts that need a real value rather than a
+ * Tailwind class (Leaflet's SVG renderer sets path colors as attributes,
+ * which can't reference `var(--…)`).
+ */
+export function getScoreBandColorValue(score: number): string {
+  const band = getScoreBand(score);
+  if (typeof window === 'undefined') return '';
+  return getComputedStyle(document.documentElement)
+    .getPropertyValue(BAND_CSS_VAR[band])
+    .trim();
+}

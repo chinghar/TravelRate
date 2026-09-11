@@ -28,3 +28,10 @@ export function searchCities(query: string, limit = 30): City[] {
   matches.sort((a, b) => b.population - a.population);
   return matches.slice(0, limit);
 }
+
+/** Presentation-only: "35.68°N 139.65°E" — the app's one travel motif. */
+export function formatCoordinates(lat: number, lng: number): string {
+  const latDir = lat >= 0 ? 'N' : 'S';
+  const lngDir = lng >= 0 ? 'E' : 'W';
+  return `${Math.abs(lat).toFixed(2)}°${latDir} ${Math.abs(lng).toFixed(2)}°${lngDir}`;
+}

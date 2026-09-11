@@ -36,26 +36,26 @@ export default function WishlistPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold">Want to go</h1>
+      <h1 className="text-lg font-medium text-mute">Want to go</h1>
 
       <div className="flex flex-col gap-2">
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search a city to add…"
-          className="rounded-lg border border-stone-300 px-4 py-2.5 text-base outline-none focus:border-stone-500"
+          className="border-b border-line bg-transparent px-1 py-2.5 text-base"
         />
         {results.length > 0 && (
-          <ul className="flex flex-col divide-y divide-stone-200 overflow-hidden rounded-xl border border-stone-200 bg-white">
+          <ul className="flex flex-col divide-y divide-line border-t border-line">
             {results.map((city) => (
               <li key={city.id}>
                 <button
                   type="button"
                   onClick={() => addCity(city.id)}
-                  className="flex w-full flex-col px-4 py-2.5 text-left hover:bg-stone-50"
+                  className="flex w-full flex-col py-2.5 text-left hover:bg-ink/[0.03]"
                 >
                   <span className="font-medium">{city.name}</span>
-                  <span className="text-sm text-stone-500">
+                  <span className="text-sm text-mute">
                     {city.admin ? `${city.admin}, ` : ''}
                     {city.country}
                   </span>
@@ -67,32 +67,32 @@ export default function WishlistPage() {
       </div>
 
       {loaded && wishlistEntries.length === 0 && (
-        <p className="py-12 text-center text-stone-500">
-          Nothing on your want-to-go list yet.
+        <p className="py-12 text-center text-mute">
+          Your want-to-go list is empty.
         </p>
       )}
 
-      <ul className="flex flex-col divide-y divide-stone-200 rounded-xl border border-stone-200 bg-white">
+      <ul className="flex flex-col border-t border-line">
         {wishlistEntries.map(({ city }) => (
-          <li key={city.id} className="flex items-center gap-3 px-4 py-3">
+          <li key={city.id} className="flex items-center gap-3 border-b border-line py-3">
             <Link href={`/city/${city.id}`} className="min-w-0 flex-1">
               <span className="block truncate font-medium">{city.name}</span>
-              <span className="block truncate text-sm text-stone-500">
+              <span className="block truncate text-sm text-mute">
                 {city.admin ? `${city.admin}, ` : ''}
                 {city.country}
               </span>
             </Link>
             <Link
               href={`/add?cityId=${city.id}`}
-              className="shrink-0 rounded-full bg-stone-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-stone-700"
+              className="shrink-0 rounded-full bg-ink px-3 py-1.5 text-xs font-medium text-paper"
             >
-              I&apos;ve been here
+              Rank this city
             </Link>
             <button
               type="button"
               onClick={() => remove(city.id)}
               aria-label={`Remove ${city.name}`}
-              className="shrink-0 rounded-full p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
+              className="shrink-0 p-1.5 text-mute hover:text-ink"
             >
               ✕
             </button>

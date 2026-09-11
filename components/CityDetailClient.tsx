@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { getCityById } from '@/lib/cities';
+import { getCityById, formatCoordinates } from '@/lib/cities';
 import * as db from '@/lib/db';
 import { useCityData } from '@/lib/useCityData';
 import { BUCKET_LABELS } from '@/lib/ranking';
@@ -30,9 +30,9 @@ export default function CityDetailClient({ cityId }: { cityId: string }) {
   if (!city) {
     return (
       <div className="flex flex-col items-center gap-4 py-24 text-center">
-        <h1 className="text-xl font-semibold">City not found</h1>
-        <Link href="/" className="text-stone-600 underline">
-          Back to rankings
+        <h1 className="text-lg font-semibold">City not found.</h1>
+        <Link href="/" className="text-mute underline">
+          Back to your rankings
         </Link>
       </div>
     );
@@ -92,51 +92,53 @@ export default function CityDetailClient({ cityId }: { cityId: string }) {
   return (
     <div className="mx-auto flex w-full max-w-lg flex-col gap-6">
       <div>
-        <Link href="/" className="text-sm text-stone-500 hover:underline">
-          ← Rankings
+        <Link href="/" className="text-sm text-mute hover:text-ink">
+          ← Your rankings
         </Link>
         <h1 className="mt-1 text-3xl font-semibold">{city.name}</h1>
-        <p className="text-stone-500">
+        <p className="text-mute">
           {city.admin ? `${city.admin}, ` : ''}
           {city.country}
+        </p>
+        <p className="font-mono text-sm text-mute">
+          {formatCoordinates(city.lat, city.lng)}
         </p>
       </div>
 
       {visit && rankEntry && (
-        <div className="flex items-center justify-between rounded-xl border border-stone-200 bg-white p-4">
-          <div>
-            <p className="text-sm text-stone-500">
-              #{rankIndex + 1} overall · #{bucketPosition + 1} of{' '}
-              {bucketPeers.length} in {BUCKET_LABELS[visit.bucket]}
-            </p>
+        <div className="flex items-center justify-between border-y border-line py-4">
+          <div className="flex flex-col text-sm text-mute">
+            <span>#{rankIndex + 1} overall</span>
+            <span>
+              #{bucketPosition + 1} of {bucketPeers.length} in{' '}
+              {BUCKET_LABELS[visit.bucket]}
+            </span>
           </div>
-          <ScoreBadge score={rankEntry.score} />
+          <ScoreBadge score={rankEntry.score} size="lg" />
         </div>
       )}
 
-      {visit === undefined && (
-        <p className="text-stone-400">Loading…</p>
-      )}
+      {visit === undefined && <p className="text-mute">Loading…</p>}
 
       {visit === null && (
-        <div className="flex flex-col gap-3 rounded-xl border border-stone-200 bg-white p-4">
-          <p className="text-stone-600">
+        <div className="flex flex-col gap-3 border-y border-line py-4">
+          <p className="text-ink">
             {wishlistItem
-              ? "On your want-to-go list. Haven't ranked it yet."
-              : "You haven't ranked this city yet."}
+              ? "This city is on your want-to-go list. You haven't ranked it."
+              : "You haven't ranked this city."}
           </p>
           <div className="flex flex-wrap gap-2">
             <Link
               href={`/add?cityId=${cityId}`}
-              className="rounded-full bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-700"
+              className="rounded-full bg-ink px-4 py-2 text-sm font-medium text-paper"
             >
-              I&apos;ve been here
+              Rank this city
             </Link>
             {wishlistItem ? (
               <button
                 type="button"
                 onClick={removeFromWishlist}
-                className="rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-100"
+                className="rounded-full border border-line px-4 py-2 text-sm font-medium text-mute hover:text-ink"
               >
                 Remove from want to go
               </button>
@@ -144,7 +146,7 @@ export default function CityDetailClient({ cityId }: { cityId: string }) {
               <button
                 type="button"
                 onClick={addToWishlist}
-                className="rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-100"
+                className="rounded-full border border-line px-4 py-2 text-sm font-medium text-mute hover:text-ink"
               >
                 Add to want to go
               </button>
@@ -156,7 +158,7 @@ export default function CityDetailClient({ cityId }: { cityId: string }) {
       {visit && (
         <>
           <div className="flex flex-col gap-2">
-            <h2 className="text-sm font-medium text-stone-500">Tags</h2>
+            <h2 className="text-sm font-medium text-mute">Tags</h2>
             <div className="flex flex-wrap gap-2">
               {ALL_TAGS.map((tag) => (
                 <button
@@ -165,8 +167,8 @@ export default function CityDetailClient({ cityId }: { cityId: string }) {
                   onClick={() => toggleTag(tag)}
                   className={`rounded-full px-3 py-1 text-xs font-medium capitalize ${
                     visit.tags.includes(tag)
-                      ? 'bg-stone-900 text-white'
-                      : 'bg-stone-200 text-stone-700 hover:bg-stone-300'
+                      ? 'bg-ink text-paper'
+                      : 'border border-line text-mute hover:text-ink'
                   }`}
                 >
                   {tag}
@@ -176,19 +178,19 @@ export default function CityDetailClient({ cityId }: { cityId: string }) {
           </div>
 
           <div className="flex flex-col gap-2">
-            <h2 className="text-sm font-medium text-stone-500">Dates visited</h2>
+            <h2 className="text-sm font-medium text-mute">Dates visited</h2>
             <div className="flex flex-wrap gap-2">
               {visit.dates.map((date) => (
                 <span
                   key={date}
-                  className="flex items-center gap-1 rounded-full bg-stone-100 px-3 py-1 text-sm"
+                  className="flex items-center gap-1 border border-line px-3 py-1 font-mono text-sm"
                 >
                   {date}
                   <button
                     type="button"
                     onClick={() => removeDate(date)}
                     aria-label={`Remove ${date}`}
-                    className="text-stone-400 hover:text-stone-700"
+                    className="text-mute hover:text-ink"
                   >
                     ✕
                   </button>
@@ -200,12 +202,12 @@ export default function CityDetailClient({ cityId }: { cityId: string }) {
                 type="date"
                 value={newDate}
                 onChange={(e) => setNewDate(e.target.value)}
-                className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm"
+                className="border border-line px-3 py-1.5 text-sm"
               />
               <button
                 type="button"
                 onClick={addDate}
-                className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium hover:bg-stone-100"
+                className="border border-line px-3 py-1.5 text-sm font-medium hover:border-ink"
               >
                 Add date
               </button>
@@ -213,20 +215,20 @@ export default function CityDetailClient({ cityId }: { cityId: string }) {
           </div>
 
           <div className="flex flex-col gap-2">
-            <h2 className="text-sm font-medium text-stone-500">Notes</h2>
+            <h2 className="text-sm font-medium text-mute">Notes</h2>
             <textarea
               value={notesDraft}
               onChange={(e) => setNotesDraft(e.target.value)}
               onBlur={saveNotes}
               rows={4}
               placeholder="What did you think of this city?"
-              className="rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-stone-500"
+              className="border border-line px-3 py-2 text-sm"
             />
           </div>
 
           <Link
             href={`/add?cityId=${cityId}`}
-            className="self-start rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-100"
+            className="self-start rounded-full border border-line px-4 py-2 text-sm font-medium text-mute hover:text-ink"
           >
             Re-rank
           </Link>
