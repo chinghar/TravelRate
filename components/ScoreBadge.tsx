@@ -1,10 +1,10 @@
-import { getScoreBand } from '@/lib/ranking';
+import type { Bucket } from '@/lib/types';
 
-const BAND_TEXT_CLASS = {
+const BAND_TEXT_CLASS: Record<Bucket, string> = {
   loved: 'text-signal',
   fine: 'text-signal-dim',
   didnt: 'text-ink',
-} as const;
+};
 
 const SIZE_CLASS = {
   md: 'text-lg',
@@ -13,37 +13,37 @@ const SIZE_CLASS = {
 
 export default function ScoreBadge({
   score,
+  bucket,
   size = 'md',
 }: {
   score: number;
+  bucket: Bucket;
   size?: 'md' | 'lg';
 }) {
-  const band = getScoreBand(score);
   return (
     <span
-      className={`font-mono font-bold tabular-nums ${SIZE_CLASS[size]} ${BAND_TEXT_CLASS[band]}`}
+      className={`font-mono font-bold tabular-nums ${SIZE_CLASS[size]} ${BAND_TEXT_CLASS[bucket]}`}
     >
       {score.toFixed(1)}
     </span>
   );
 }
 
-const BAND_CSS_VAR = {
+const BAND_CSS_VAR: Record<Bucket, string> = {
   loved: '--signal',
   fine: '--signal-dim',
   didnt: '--mute',
-} as const;
+};
 
 /**
- * Resolves a band to its actual color, read from the CSS custom properties
- * in globals.css, for contexts that need a real value rather than a
- * Tailwind class (Leaflet's SVG renderer sets path colors as attributes,
- * which can't reference `var(--…)`).
+ * Resolves a bucket to its actual color, read from the CSS custom
+ * properties in globals.css, for contexts that need a real value rather
+ * than a Tailwind class (Leaflet's SVG renderer sets path colors as
+ * attributes, which can't reference `var(--…)`).
  */
-export function getScoreBandColorValue(score: number): string {
-  const band = getScoreBand(score);
+export function getBandColorValue(bucket: Bucket): string {
   if (typeof window === 'undefined') return '';
   return getComputedStyle(document.documentElement)
-    .getPropertyValue(BAND_CSS_VAR[band])
+    .getPropertyValue(BAND_CSS_VAR[bucket])
     .trim();
 }

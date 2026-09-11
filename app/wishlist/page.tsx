@@ -7,10 +7,9 @@ import * as db from '@/lib/db';
 import { useCityData } from '@/lib/useCityData';
 
 export default function WishlistPage() {
-  const { wishlistEntries, visits, loaded, refresh } = useCityData();
+  const { wishlistEntries, rankedCityIds, loaded, refresh } = useCityData();
   const [query, setQuery] = useState('');
 
-  const visitedIds = useMemo(() => new Set(visits.map((v) => v.cityId)), [visits]);
   const wishlistIds = useMemo(
     () => new Set(wishlistEntries.map((e) => e.city.id)),
     [wishlistEntries]
@@ -19,9 +18,9 @@ export default function WishlistPage() {
   const results = useMemo(() => {
     if (!query.trim()) return [];
     return searchCities(query, 10).filter(
-      (c) => !visitedIds.has(c.id) && !wishlistIds.has(c.id)
+      (c) => !rankedCityIds.has(c.id) && !wishlistIds.has(c.id)
     );
-  }, [query, visitedIds, wishlistIds]);
+  }, [query, rankedCityIds, wishlistIds]);
 
   async function addCity(cityId: string) {
     await db.addToWishlist({ cityId, addedAt: new Date().toISOString() });
