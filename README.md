@@ -1,36 +1,49 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# CityRank
 
-## Getting Started
+Log the cities you've visited, rank them through forced head-to-head
+comparisons, and see a scored ranked list and a map. Beli, but for cities.
 
-First, run the development server:
+Everything runs client-side — IndexedDB for storage, a bundled dataset of
+~1,500 world cities, and Leaflet/OpenStreetMap for the map. No accounts, no
+database, no environment variables.
+
+## Getting started
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Deploy
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+vercel --prod
+```
 
-## Learn More
+No configuration required — a fresh clone deploys and works immediately.
 
-To learn more about Next.js, take a look at the following resources:
+## How ranking works
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Add a city and pick a coarse bucket: **Loved it**, **It was fine**, or
+   **Didn't like it**. Each bucket owns a fixed score range.
+2. The new city is placed within its bucket via binary-search insertion:
+   you're shown one existing city at a time and asked which you preferred
+   (or "too close to call" to stop early). This takes O(log n) comparisons.
+3. Scores are computed by interpolating linearly across the bucket's range
+   based on final rank position — they're never stored directly, only
+   derived from rank order.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Data
 
-## Deploy on Vercel
+`data/cities.json` is a static, pre-processed extract of the GeoNames
+`cities15000` dataset (CC BY 4.0) — name, country, admin region, coordinates,
+and population for ~1,500 of the world's largest cities. It's bundled with
+the app and never fetched at runtime.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Backup
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Your data lives only in this browser's IndexedDB. Use the settings sheet
+(gear icon) to export a JSON backup or import one — this is the only way to
+move data between browsers or devices.
