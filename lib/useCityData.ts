@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import * as db from './db';
 import { getCityById } from './cities';
-import { computeAllScores, flattenBucketOrders } from './ranking';
+import { BUCKET_ORDER, flattenBucketOrders } from './ranking';
+import { computeAllScores } from './scoring';
 import { DIMENSIONS, type DimensionId } from './dimensions';
 import type { Bucket, City, RankingRecord, Visit, WishlistItem } from './types';
 
@@ -80,6 +81,13 @@ export function useCityData() {
       if (!scores) return [];
       return rankings
         .filter((r) => r.dimensionId === dimensionId)
+        .slice()
+        // Rank position, never the (rounded, possibly tied) score — a full
+        // band produces duplicate displayed scores by design.
+        .sort((a, b) => {
+          const bucketDiff = BUCKET_ORDER.indexOf(a.bucket) - BUCKET_ORDER.indexOf(b.bucket);
+          return bucketDiff !== 0 ? bucketDiff : a.position - b.position;
+        })
         .map((r) => {
           const city = getCityById(r.cityId);
           if (!city) return null;
@@ -92,8 +100,7 @@ export function useCityData() {
           };
           return entry;
         })
-        .filter((e): e is RankedCityEntry => e !== null)
-        .sort((a, b) => b.score - a.score);
+        .filter((e): e is RankedCityEntry => e !== null);
     },
     [rankings, scoresByDimension, visitByCityId]
   );

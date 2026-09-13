@@ -9,54 +9,6 @@ export const BUCKET_LABELS: Record<Bucket, string> = {
 /** Buckets determine ordering precedence only — they own no score range. */
 export const BUCKET_ORDER: Bucket[] = ['loved', 'fine', 'didnt'];
 
-function round1(n: number): number {
-  return Math.round(n * 10) / 10;
-}
-
-/**
- * Score for one entry given its absolute position (0 = best) in a
- * dimension's WHOLE ranked list of `totalCount` entries. Linear
- * interpolation across the entire list: the top entry always scores
- * exactly 10.0; the bottom approaches (never reaches) 0.0; the gap
- * between consecutive ranks is a constant 10 / totalCount.
- */
-export function computeScoreAtPosition(position: number, totalCount: number): number {
-  if (totalCount <= 0) return 10;
-  return round1(10 * (1 - position / totalCount));
-}
-
-export interface RankedEntry {
-  cityId: string;
-  bucket: Bucket;
-  position: number;
-}
-
-/**
- * Recomputes scores for every entry in one dimension's full ranked list.
- * Buckets only decide precedence (loved, then fine, then didn't); within a
- * bucket, entries are ordered by `position`. Scores are always derived —
- * never stored directly.
- */
-export function computeAllScores(entries: RankedEntry[]): Map<string, number> {
-  const scores = new Map<string, number>();
-  const byBucket: Record<Bucket, RankedEntry[]> = {
-    loved: [],
-    fine: [],
-    didnt: [],
-  };
-  for (const entry of entries) {
-    byBucket[entry.bucket].push(entry);
-  }
-  const flat = BUCKET_ORDER.flatMap((bucket) =>
-    byBucket[bucket].slice().sort((a, b) => a.position - b.position)
-  );
-  const total = flat.length;
-  flat.forEach((entry, i) => {
-    scores.set(entry.cityId, computeScoreAtPosition(i, total));
-  });
-  return scores;
-}
-
 /** Flattens per-bucket order arrays into one absolute rank order, best to worst. */
 export function flattenBucketOrders(bucketOrders: Record<Bucket, string[]>): string[] {
   return BUCKET_ORDER.flatMap((bucket) => bucketOrders[bucket]);
