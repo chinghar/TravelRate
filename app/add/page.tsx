@@ -8,8 +8,6 @@ import {
   BUCKET_LABELS,
   BUCKET_ORDER,
   answerComparison,
-  computeScoreAtPosition,
-  flattenBucketOrders,
   getCurrentComparisonCityId,
   getInsertIndex,
   insertCityIntoBucket,
@@ -18,6 +16,7 @@ import {
   type ComparisonAnswer,
   type ComparisonState,
 } from '@/lib/ranking';
+import { computeAllScores } from '@/lib/scoring';
 import {
   DIMENSIONS,
   OVERALL_DIMENSION_ID,
@@ -30,7 +29,6 @@ import type { Bucket, City, RankingRecord } from '@/lib/types';
 
 type Step = 'search' | 'bucket' | 'compare' | 'confirm' | 'pickDimensions';
 
-const BUCKET_STEP_ORDER: Bucket[] = ['loved', 'fine', 'didnt'];
 const VALID_DIMENSION_IDS = new Set(DIMENSIONS.map((d) => d.id));
 
 function AddFlowInner() {
@@ -127,16 +125,10 @@ function AddFlowInner() {
 
   const finalScore = useMemo(() => {
     if (!finalOrder || !bucket || !selectedCity) return null;
-    const byBucket: Record<Bucket, string[]> = { loved: [], fine: [], didnt: [] };
-    for (const b of BUCKET_STEP_ORDER) {
-      byBucket[b] =
-        b === bucket ? finalOrder : getBucketOrder(currentDimensionId, b, selectedCity.id);
-    }
-    const flat = flattenBucketOrders(byBucket);
-    const position = flat.indexOf(selectedCity.id);
-    return computeScoreAtPosition(position, flat.length);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [finalOrder, bucket, selectedCity, currentDimensionId, allRankings]);
+    const entries = finalOrder.map((cityId, position) => ({ cityId, bucket, position }));
+    const scores = computeAllScores(entries);
+    return scores.get(selectedCity.id) ?? null;
+  }, [finalOrder, bucket, selectedCity]);
 
   const isLastStep =
     isolatedMode ||
