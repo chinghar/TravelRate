@@ -157,7 +157,10 @@ export default function CityDetailClient({ cityId }: { cityId: string }) {
                 <div className="flex flex-col">
                   <span className="font-medium">{dim.label}</span>
                   <span className="text-sm text-mute">
-                    #{r.position + 1} of {r.total} in {BUCKET_LABELS[r.bucket]}
+                    #{r.overallPosition + 1} of {r.overallTotal} in {dim.label}
+                  </span>
+                  <span className="text-sm text-mute">
+                    #{r.bucketPosition + 1} of {r.bucketTotal} in {BUCKET_LABELS[r.bucket]}
                   </span>
                 </div>
                 <div className="flex items-center gap-3">
