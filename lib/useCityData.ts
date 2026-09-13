@@ -18,9 +18,12 @@ export interface RankedCityEntry {
 export interface CityDimensionRanking {
   dimensionId: DimensionId;
   bucket: Bucket;
-  /** 0-indexed absolute position within the dimension's whole ranked list. */
-  position: number;
-  total: number;
+  /** 0-indexed position within just this bucket. */
+  bucketPosition: number;
+  bucketTotal: number;
+  /** 0-indexed absolute position within the dimension's whole ranked list (all buckets). */
+  overallPosition: number;
+  overallTotal: number;
   score: number;
 }
 
@@ -118,13 +121,16 @@ export function useCityData() {
           byBucket[r.bucket].push(r.cityId);
         }
         const flat = flattenBucketOrders(byBucket);
+        const bucketList = byBucket[record.bucket];
         const scores = scoresByDimension.get(dim.id)!;
 
         result.push({
           dimensionId: dim.id,
           bucket: record.bucket,
-          position: flat.indexOf(cityId),
-          total: flat.length,
+          bucketPosition: bucketList.indexOf(cityId),
+          bucketTotal: bucketList.length,
+          overallPosition: flat.indexOf(cityId),
+          overallTotal: flat.length,
           score: scores.get(cityId) ?? 0,
         });
       }
