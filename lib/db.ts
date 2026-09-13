@@ -153,6 +153,28 @@ export async function deleteRanking(
   await db.delete('rankings', [cityId, dimensionId]);
 }
 
+/**
+ * Removes one city's ranking on one dimension, then closes the gap it
+ * leaves by reindexing the remaining members of that bucket. Only the
+ * affected dimension's bucket is touched — every other dimension, and
+ * every other bucket in this one, is left alone.
+ */
+export async function deleteRankingAndReindex(
+  cityId: string,
+  dimensionId: DimensionId,
+  bucket: Bucket
+): Promise<void> {
+  const all = await getAllRankings();
+  const remaining = all
+    .filter((r) => r.dimensionId === dimensionId && r.bucket === bucket && r.cityId !== cityId)
+    .sort((a, b) => a.position - b.position)
+    .map((r, idx) => ({ ...r, position: idx, updatedAt: new Date().toISOString() }));
+  await deleteRanking(cityId, dimensionId);
+  if (remaining.length > 0) {
+    await putRankings(remaining);
+  }
+}
+
 export interface ExportPayloadV2 {
   version: 2;
   exportedAt: string;
