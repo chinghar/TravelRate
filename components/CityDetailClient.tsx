@@ -6,9 +6,9 @@ import { getCityById, formatCoordinates } from '@/lib/cities';
 import * as db from '@/lib/db';
 import { useCityData } from '@/lib/useCityData';
 import { BUCKET_LABELS } from '@/lib/ranking';
-import { DIMENSIONS, getDimension } from '@/lib/dimensions';
+import { DIMENSIONS, getDimension, type DimensionId } from '@/lib/dimensions';
 import ScoreBadge from '@/components/ScoreBadge';
-import { ALL_TAGS, type Tag, type Visit, type WishlistItem } from '@/lib/types';
+import { ALL_TAGS, type Bucket, type Tag, type Visit, type WishlistItem } from '@/lib/types';
 
 export default function CityDetailClient({ cityId }: { cityId: string }) {
   const city = getCityById(cityId);
@@ -75,6 +75,24 @@ export default function CityDetailClient({ cityId }: { cityId: string }) {
 
   function removeDate(date: string) {
     updateVisit((prev) => ({ ...prev, dates: prev.dates.filter((d) => d !== date) }));
+  }
+
+  async function deleteDimensionRanking(dimensionId: DimensionId, bucket: Bucket) {
+    if (!city) return;
+    const dim = getDimension(dimensionId);
+    if (!window.confirm(`Delete ${city.name}'s ${dim.label.toLowerCase()} ranking?`)) {
+      return;
+    }
+    const allRankings = await db.getAllRankings();
+    const remaining = allRankings
+      .filter((r) => r.dimensionId === dimensionId && r.bucket === bucket && r.cityId !== cityId)
+      .sort((a, b) => a.position - b.position)
+      .map((r, idx) => ({ ...r, position: idx, updatedAt: new Date().toISOString() }));
+    await db.deleteRanking(cityId, dimensionId);
+    if (remaining.length > 0) {
+      await db.putRankings(remaining);
+    }
+    refresh();
   }
 
   async function addToWishlist() {
@@ -158,6 +176,13 @@ export default function CityDetailClient({ cityId }: { cityId: string }) {
                   >
                     Re-rank
                   </Link>
+                  <button
+                    type="button"
+                    onClick={() => deleteDimensionRanking(r.dimensionId, r.bucket)}
+                    className="text-xs font-medium text-mute hover:text-ink"
+                  >
+                    Delete
+                  </button>
                 </div>
               </li>
             );
