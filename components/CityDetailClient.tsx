@@ -83,15 +83,7 @@ export default function CityDetailClient({ cityId }: { cityId: string }) {
     if (!window.confirm(`Delete ${city.name}'s ${dim.label.toLowerCase()} ranking?`)) {
       return;
     }
-    const allRankings = await db.getAllRankings();
-    const remaining = allRankings
-      .filter((r) => r.dimensionId === dimensionId && r.bucket === bucket && r.cityId !== cityId)
-      .sort((a, b) => a.position - b.position)
-      .map((r, idx) => ({ ...r, position: idx, updatedAt: new Date().toISOString() }));
-    await db.deleteRanking(cityId, dimensionId);
-    if (remaining.length > 0) {
-      await db.putRankings(remaining);
-    }
+    await db.deleteRankingAndReindex(cityId, dimensionId, bucket);
     refresh();
   }
 

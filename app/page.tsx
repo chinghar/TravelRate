@@ -1,11 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useCityData } from '@/lib/useCityData';
 import { formatCoordinates } from '@/lib/cities';
+import * as db from '@/lib/db';
 import ScoreBadge from '@/components/ScoreBadge';
-import { ALL_TAGS, type Tag } from '@/lib/types';
+import { ALL_TAGS, type Bucket, type Tag } from '@/lib/types';
 import {
   DIMENSIONS,
   OVERALL_DIMENSION_ID,
@@ -14,9 +15,10 @@ import {
 } from '@/lib/dimensions';
 
 export default function HomePage() {
-  const { getRankedEntries, loaded } = useCityData();
+  const { getRankedEntries, loaded, refresh } = useCityData();
   const [dimensionId, setDimensionId] = useState<DimensionId>(OVERALL_DIMENSION_ID);
   const [activeTag, setActiveTag] = useState<Tag | null>(null);
+  const [openMenuCityId, setOpenMenuCityId] = useState<string | null>(null);
 
   const dimension = getDimension(dimensionId);
   const rankedEntries = getRankedEntries(dimensionId);
@@ -25,6 +27,22 @@ export default function HomePage() {
     if (!activeTag) return rankedEntries;
     return rankedEntries.filter((e) => e.tags.includes(activeTag));
   }, [rankedEntries, activeTag]);
+
+  useEffect(() => {
+    if (!openMenuCityId) return;
+    const close = () => setOpenMenuCityId(null);
+    document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
+  }, [openMenuCityId]);
+
+  async function deleteRanking(cityId: string, cityName: string, bucket: Bucket) {
+    setOpenMenuCityId(null);
+    if (!window.confirm(`Delete ${cityName}'s ${dimension.label.toLowerCase()} ranking?`)) {
+      return;
+    }
+    await db.deleteRankingAndReindex(cityId, dimensionId, bucket);
+    refresh();
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -96,26 +114,59 @@ export default function HomePage() {
           <ol className="flex flex-col border-t border-line">
             {filtered.map((entry, idx) => (
               <li key={entry.city.id} className="border-b border-line">
-                <Link
-                  href={`/city/${entry.city.id}`}
-                  className="flex items-center gap-4 py-3 hover:bg-ink/[0.03]"
-                >
-                  <span className="w-7 shrink-0 font-mono text-sm text-mute">
-                    {String(idx + 1).padStart(2, '0')}
-                  </span>
-                  <div className="flex min-w-0 flex-1 flex-col">
-                    <span className="truncate font-medium">{entry.city.name}</span>
-                    <span className="truncate font-mono text-xs text-mute">
-                      {formatCoordinates(entry.city.lat, entry.city.lng)}
+                <div className="flex items-center gap-2 hover:bg-ink/[0.03]">
+                  <Link
+                    href={`/city/${entry.city.id}`}
+                    className="flex min-w-0 flex-1 items-center gap-4 py-3"
+                  >
+                    <span className="w-7 shrink-0 font-mono text-sm text-mute">
+                      {String(idx + 1).padStart(2, '0')}
                     </span>
-                    {entry.tags.length > 0 && (
-                      <span className="truncate text-xs text-mute">
-                        {entry.tags.join(', ')}
+                    <div className="flex min-w-0 flex-1 flex-col">
+                      <span className="truncate font-medium">{entry.city.name}</span>
+                      <span className="truncate font-mono text-xs text-mute">
+                        {formatCoordinates(entry.city.lat, entry.city.lng)}
                       </span>
+                      {entry.tags.length > 0 && (
+                        <span className="truncate text-xs text-mute">
+                          {entry.tags.join(', ')}
+                        </span>
+                      )}
+                    </div>
+                    <ScoreBadge score={entry.score} bucket={entry.bucket} />
+                  </Link>
+                  <div className="relative shrink-0 pr-2">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenMenuCityId((prev) =>
+                          prev === entry.city.id ? null : entry.city.id
+                        );
+                      }}
+                      aria-label={`Actions for ${entry.city.name}`}
+                      className="rounded-full px-2 py-1 text-mute hover:text-ink"
+                    >
+                      ⋯
+                    </button>
+                    {openMenuCityId === entry.city.id && (
+                      <div
+                        onClick={(e) => e.stopPropagation()}
+                        className="absolute right-2 top-full z-10 mt-1 w-44 border border-line bg-paper"
+                      >
+                        <button
+                          type="button"
+                          onClick={() =>
+                            deleteRanking(entry.city.id, entry.city.name, entry.bucket)
+                          }
+                          className="block w-full px-3 py-2 text-left text-sm text-mute hover:bg-ink/[0.03] hover:text-ink"
+                        >
+                          Delete {dimension.label.toLowerCase()} ranking
+                        </button>
+                      </div>
                     )}
                   </div>
-                  <ScoreBadge score={entry.score} bucket={entry.bucket} />
-                </Link>
+                </div>
               </li>
             ))}
           </ol>
