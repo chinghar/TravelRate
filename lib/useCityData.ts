@@ -146,7 +146,10 @@ export function useCityData() {
       return { city, item };
     })
     .filter((e): e is WishlistCityEntry => e !== null)
-    .sort((a, b) => (a.item.addedAt < b.item.addedAt ? 1 : -1));
+    .sort((a, b) => {
+      if (a.item.addedAt === b.item.addedAt) return 0;
+      return a.item.addedAt < b.item.addedAt ? 1 : -1;
+    });
 
   /** Every cityId ranked on at least one dimension — used by the map to
    * decide which cities to render at all (colored, or muted if unranked
