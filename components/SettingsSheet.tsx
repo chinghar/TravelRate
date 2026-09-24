@@ -6,7 +6,12 @@ import { exportAllData, importAllData, type ExportPayload } from '@/lib/db';
 function isExportPayload(data: unknown): data is ExportPayload {
   if (!data || typeof data !== 'object') return false;
   const d = data as Record<string, unknown>;
-  return Array.isArray(d.visits) && Array.isArray(d.wishlist);
+  if (!Array.isArray(d.visits) || !Array.isArray(d.wishlist)) return false;
+  // v2 exports carry a rankings array; importAllData clears the existing
+  // stores before writing, so this must be checked up front rather than
+  // letting a missing/malformed field fail mid-import and lose data.
+  if (d.version === 2) return Array.isArray(d.rankings);
+  return true;
 }
 
 export default function SettingsSheet({
