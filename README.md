@@ -48,3 +48,4 @@ Your data lives only in this browser's IndexedDB. Use the settings sheet
 (gear icon) to export a JSON backup or import one — this is the only way to
 move data between browsers or devices.
 <!-- doc pass 1 -->
+<!-- doc pass 2 -->
