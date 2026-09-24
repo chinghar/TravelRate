@@ -69,7 +69,11 @@ export default function CityDetailClient({ cityId }: { cityId: string }) {
 
   function addDate() {
     if (!newDate) return;
-    updateVisit((prev) => ({ ...prev, dates: [...prev.dates, newDate].sort() }));
+    updateVisit((prev) =>
+      prev.dates.includes(newDate)
+        ? prev
+        : { ...prev, dates: [...prev.dates, newDate].sort() }
+    );
     setNewDate('');
   }
 
