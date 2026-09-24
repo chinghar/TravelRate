@@ -250,6 +250,7 @@ export default function CityDetailClient({ cityId }: { cityId: string }) {
           <input
             type="date"
             value={newDate}
+            max={new Date().toISOString().slice(0, 10)}
             onChange={(e) => setNewDate(e.target.value)}
             className="border border-line px-3 py-1.5 text-sm"
           />
